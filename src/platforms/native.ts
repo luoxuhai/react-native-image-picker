@@ -20,14 +20,18 @@ const DEFAULT_OPTIONS: ImageLibraryOptions & CameraOptions = {
 
 export function camera(
   options: CameraOptions,
-  callback?: Callback
+  callback?: Callback,
+  onDidFinishPicking?: () => void,
 ): Promise<ImagePickerResponse> {
 
   return new Promise((resolve) => {
+    const ev = Emitter.addListener(DID_FINISH_PICKING, () => onDidFinishPicking?.());
+
     NativeModules.ImagePickerManager.launchCamera(
       {...DEFAULT_OPTIONS, ...options},
       (result: ImagePickerResponse) => {
         if (callback) callback(result);
+        ev.remove();
         resolve(result);
       },
     );
@@ -41,11 +45,12 @@ export function imageLibrary(
 ): Promise<ImagePickerResponse> {
   return new Promise((resolve) => {
     const ev = Emitter.addListener(DID_FINISH_PICKING, () => onDidFinishPicking?.());
+
     NativeModules.ImagePickerManager.launchImageLibrary(
       {...DEFAULT_OPTIONS, ...options},
       (result: ImagePickerResponse) => {
         if (callback) callback(result);
-        ev.remove()
+        ev.remove();
         resolve(result);
       }
     );

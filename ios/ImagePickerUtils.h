@@ -19,6 +19,6 @@
 
 + (NSString *) getFileSizeFromUrl:(NSURL *)url;
 
-+ (PHAsset *)fetchPHAssetOnIOS13:(NSDictionary<NSString *,id> *)info;
-    
++ (UIImage *) getUIImageFromInfo:(NSDictionary *)info;
+
 @end

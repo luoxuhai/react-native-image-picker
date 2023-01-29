@@ -1,6 +1,6 @@
 {
   "name": "@react-native-library/photos-picker",
-  "version": "1.0.2",
+  "version": "1.0.7",
   "description": "A React Native module that allows you to use native UI to select media from the device library or directly from the camera",
   "react-native": "src/index.ts",
   "main": "src/index.ts",
@@ -26,7 +26,8 @@
     "start": "react-native start",
     "example": "yarn --cwd example",
     "prepare": "bob build",
-    "ci:publish": "yarn semantic-release"
+    "ci:publish": "yarn semantic-release",
+    "release": "npm publish --access public"
   },
   "keywords": [
     "react-native",

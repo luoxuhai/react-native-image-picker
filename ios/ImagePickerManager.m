@@ -111,16 +111,53 @@ RCT_EXPORT_METHOD(launchImageLibrary:(NSDictionary *)options callback:(RCTRespon
 
 #pragma mark - Helpers
 
+CGImagePropertyOrientation CGImagePropertyOrientationForUIImageOrientation(UIImageOrientation uiOrientation) {
+    //code from here: https://developer.apple.com/documentation/imageio/cgimagepropertyorientation?language=objc
+    switch (uiOrientation) {
+        case UIImageOrientationUp: return kCGImagePropertyOrientationUp;
+        case UIImageOrientationDown: return kCGImagePropertyOrientationDown;
+        case UIImageOrientationLeft: return kCGImagePropertyOrientationLeft;
+        case UIImageOrientationRight: return kCGImagePropertyOrientationRight;
+        case UIImageOrientationUpMirrored: return kCGImagePropertyOrientationUpMirrored;
+        case UIImageOrientationDownMirrored: return kCGImagePropertyOrientationDownMirrored;
+        case UIImageOrientationLeftMirrored: return kCGImagePropertyOrientationLeftMirrored;
+        case UIImageOrientationRightMirrored: return kCGImagePropertyOrientationRightMirrored;
+    }
+}
+
+NSData* extractImageData(UIImage* image){
+    CFMutableDataRef imageData = CFDataCreateMutable(NULL, 0);
+    CGImageDestinationRef destination = CGImageDestinationCreateWithData(imageData, kUTTypeJPEG, 1, NULL);
+    
+    CFStringRef orientationKey[1];
+    CFTypeRef   orientationValue[1];
+    CGImagePropertyOrientation CGOrientation = CGImagePropertyOrientationForUIImageOrientation(image.imageOrientation);
+
+    orientationKey[0] = kCGImagePropertyOrientation;
+    orientationValue[0] = CFNumberCreate(NULL, kCFNumberIntType, &CGOrientation);
+
+    CFDictionaryRef imageProps = CFDictionaryCreate( NULL, (const void **)orientationKey, (const void **)orientationValue, 1,
+                    &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+    
+    CGImageDestinationAddImage(destination, image.CGImage, imageProps);
+    
+    CGImageDestinationFinalize(destination);
+    
+    CFRelease(destination);
+    CFRelease(orientationValue[0]);
+    CFRelease(imageProps);
+    return (__bridge NSData *)imageData;
+}
+
 -(NSMutableDictionary *)mapImageToAsset:(NSData *)imageData phAsset:(PHAsset *)phAsset {
     NSMutableDictionary *asset = [[NSMutableDictionary alloc] init];
-    NSString *filename = target == camera ? [[[NSUUID UUID] UUIDString] stringByAppendingPathExtension:@"jpg"] : [phAsset valueForKey:@"filename"];
-
+    NSString *filename = [phAsset valueForKey:@"filename"];
     NSString *outputURL = [[self getTmpDirectory] stringByAppendingPathComponent:filename];
 
     [imageData writeToFile:outputURL atomically:YES];
 
     NSURL *fileURL = [NSURL fileURLWithPath:outputURL];
-
+    
     asset[@"uri"] = [fileURL absoluteString];
     asset[@"type"] = [ImagePickerUtils getFileTypeFromUrl:fileURL];
     asset[@"fileSize"] = [ImagePickerUtils getFileSizeFromUrl:fileURL];
@@ -139,7 +176,7 @@ RCT_EXPORT_METHOD(launchImageLibrary:(NSDictionary *)options callback:(RCTRespon
 
 -(NSMutableDictionary *)mapVideoToAsset:(AVAsset*)avAsset phAsset:(PHAsset * _Nullable)phAsset error:(NSError **)error {
     NSURL *sourceURL = [(AVURLAsset *)avAsset URL];
-    NSString *filename = target == camera ? [[[NSUUID UUID] UUIDString] stringByAppendingPathExtension:@"mov"] : [phAsset valueForKey:@"filename"];
+    NSString *filename = [phAsset valueForKey:@"filename"];
     NSString *outputURL = [[self getTmpDirectory] stringByAppendingPathComponent:filename];
     NSURL *fileURL = [NSURL fileURLWithPath:outputURL];
 
@@ -170,6 +207,46 @@ RCT_EXPORT_METHOD(launchImageLibrary:(NSDictionary *)options callback:(RCTRespon
                            @"altitude": @(location.altitude),
                            @"latitude": @(location.coordinate.latitude),
                            @"longitude": @(location.coordinate.longitude)};
+
+    return asset;
+}
+
+-(NSMutableDictionary *)mapCameraImageToAsset:(UIImage *)image {
+    NSMutableDictionary *asset = [[NSMutableDictionary alloc] init];
+    NSString *fileName = [[[NSUUID UUID] UUIDString] stringByAppendingPathExtension:@"jpg"];
+    NSString *outputURL = [[self getTmpDirectory] stringByAppendingPathComponent:fileName];
+    NSURL *fileURL = [NSURL fileURLWithPath:outputURL];
+
+    NSData *data = extractImageData(image);
+    [data writeToFile:outputURL atomically:YES];
+
+    asset[@"fileName"] = fileName;
+    asset[@"uri"] = fileURL.absoluteString;
+    asset[@"type"] = @"image/jpeg";
+    asset[@"fileSize"] = [ImagePickerUtils getFileSizeFromUrl:fileURL];
+    asset[@"width"] = @(CGImageGetWidth(image.CGImage));
+    asset[@"height"] = @(CGImageGetHeight(image.CGImage));
+
+    return asset;
+}
+
+-(NSMutableDictionary *)mapCameraVideoToAsset:(NSURL *)url {
+    NSMutableDictionary *asset = [[NSMutableDictionary alloc] init];
+    NSString *fileName = [url lastPathComponent];
+    NSString *outputURL = [[self getTmpDirectory] stringByAppendingPathComponent:fileName];
+    NSURL *fileURL = [NSURL fileURLWithPath:outputURL];
+
+    [[NSFileManager defaultManager] moveItemAtURL:url toURL:fileURL error:nil];
+
+    CGSize dimentions = [ImagePickerUtils getVideoDimensionsFromUrl:fileURL];
+    asset[@"fileName"] = fileName;
+    asset[@"uri"] = fileURL.absoluteString;
+    asset[@"type"] = [ImagePickerUtils getFileTypeFromUrl:fileURL];
+    asset[@"fileSize"] = [ImagePickerUtils getFileSizeFromUrl:fileURL];
+    asset[@"width"] = @(dimentions.width);
+    asset[@"height"] = @(dimentions.height);
+    AVAsset * avasset = [AVAsset assetWithURL:fileURL];
+    asset[@"duration"] = @(CMTimeGetSeconds(avasset.duration) * 1000);
 
     return asset;
 }
@@ -282,22 +359,18 @@ RCT_EXPORT_METHOD(launchImageLibrary:(NSDictionary *)options callback:(RCTRespon
 {
     dispatch_block_t dismissCompletionBlock = ^{
         NSMutableArray<NSDictionary *> *assets = [[NSMutableArray alloc] initWithCapacity:1];
-        PHAsset *asset = [ImagePickerUtils fetchPHAssetOnIOS13:info];
 
         if (photoSelected == YES) {
            return;
         }
         photoSelected = YES;
-
+        
         if ([info[UIImagePickerControllerMediaType] isEqualToString:(NSString *) kUTTypeImage]) {
-            NSData *data = [NSData dataWithContentsOfFile:[info[UIImagePickerControllerImageURL] absoluteString]];
-
-            NSDictionary *imageAsset = [self mapImageToAsset:data phAsset:asset];
-            [assets addObject:imageAsset];
+            NSDictionary *asset = [self mapCameraImageToAsset:[ImagePickerUtils getUIImageFromInfo:info]];
+            [assets addObject:asset];
         } else {
-            AVAsset *avAsset = [AVAsset assetWithURL:info[UIImagePickerControllerMediaURL]];
-            NSDictionary *videoAsset = [self mapVideoToAsset:avAsset phAsset:asset error:nil];
-            [assets addObject:videoAsset];
+            NSDictionary *asset = [self mapCameraVideoToAsset:info[UIImagePickerControllerMediaURL]];
+            [assets addObject:asset];
         }
 
         NSMutableDictionary *response = [[NSMutableDictionary alloc] init];
@@ -354,7 +427,6 @@ RCT_EXPORT_METHOD(launchImageLibrary:(NSDictionary *)options callback:(RCTRespon
     NSMutableArray<NSDictionary *> *assets = [[NSMutableArray alloc] initWithCapacity:results.count];
 
     for (PHPickerResult *result in results) {
-        NSItemProvider *provider = result.itemProvider;
         PHFetchOptions *fetchOptions = [[PHFetchOptions alloc] init];
         fetchOptions.includeHiddenAssets = YES;
 
@@ -365,15 +437,10 @@ RCT_EXPORT_METHOD(launchImageLibrary:(NSDictionary *)options callback:(RCTRespon
 
         if(asset.mediaType == PHAssetMediaTypeImage) {
             PHImageRequestOptions *options = [[PHImageRequestOptions alloc] init];
-            options.synchronous = YES;
+            options.synchronous = NO;
             options.networkAccessAllowed = YES;
             options.version = PHImageRequestOptionsVersionCurrent;
             options.deliveryMode = PHImageRequestOptionsDeliveryModeHighQualityFormat;
-            options.resizeMode = PHImageRequestOptionsResizeModeNone;
-
-            float maxWidth = [self.options[@"maxWidth"] floatValue];
-            float maxHeight = [self.options[@"maxHeight"] floatValue];
-            CGSize targetSize = CGSizeMake(maxWidth, maxHeight);
 
             [[PHImageManager defaultManager] requestImageDataAndOrientationForAsset:asset options:options 
                 resultHandler:^(NSData *_Nullable imageData, NSString *_Nullable dataUTI, CGImagePropertyOrientation orientation, NSDictionary *_Nullable info) {

@@ -9,8 +9,9 @@ export * from './types';
 export function launchCamera(
   options: CameraOptions,
   callback?: Callback,
+  onDidFinishPicking?: () => void,
 ) {
-  return nativeCamera(options, callback);
+  return nativeCamera(options, callback, onDidFinishPicking);
 }
 
 export function launchImageLibrary(
