@@ -425,14 +425,20 @@ NSData* extractImageData(UIImage* image){
     
     dispatch_group_t completionGroup = dispatch_group_create();
     NSMutableArray<NSDictionary *> *assets = [[NSMutableArray alloc] initWithCapacity:results.count];
-
+    
     for (PHPickerResult *result in results) {
         PHFetchOptions *fetchOptions = [[PHFetchOptions alloc] init];
         fetchOptions.includeHiddenAssets = YES;
-
+        fetchOptions.fetchLimit = 1;
+ 
         PHFetchResult* fetchResult = [PHAsset fetchAssetsWithLocalIdentifiers:@[result.assetIdentifier] options:fetchOptions];
+        
         PHAsset *asset = fetchResult.firstObject;
         
+        if (asset == nil) {
+            continue;
+        }
+                        
         dispatch_group_enter(completionGroup);
 
         if(asset.mediaType == PHAssetMediaTypeImage) {
@@ -464,10 +470,14 @@ NSData* extractImageData(UIImage* image){
         } else {
              dispatch_group_leave(completionGroup);
          }
-
     }
 
     dispatch_group_notify(completionGroup, dispatch_get_main_queue(), ^{
+        if (assets.count != results.count) {
+            self.callback(@[@{@"errorCode": errPermission}]);
+            return;
+        }
+        
         //  mapVideoToAsset can fail and return nil.
         for (NSDictionary *asset in assets) {
             if (nil == asset) {

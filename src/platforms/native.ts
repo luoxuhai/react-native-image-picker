@@ -16,6 +16,7 @@ const DEFAULT_OPTIONS: ImageLibraryOptions & CameraOptions = {
   selectionLimit: 1,
   durationLimit: 0,
   presentationStyle: 'pageSheet',
+  representationMode: 'auto',
 };
 
 export function camera(

@@ -38,7 +38,15 @@
     PHPhotoLibrary *photoLibrary = [PHPhotoLibrary sharedPhotoLibrary];
     configuration = [[PHPickerConfiguration alloc] initWithPhotoLibrary:photoLibrary];
     
-    configuration.preferredAssetRepresentationMode = PHPickerConfigurationAssetRepresentationModeCurrent;
+    PHPickerConfigurationAssetRepresentationMode representationMode;
+    if ([options[@"representationMode"] isEqualToString:@"current"]) {
+        representationMode = PHPickerConfigurationAssetRepresentationModeCurrent;
+    } else if ([options[@"representationMode"] isEqualToString:@"compatible"]) {
+        representationMode = PHPickerConfigurationAssetRepresentationModeCompatible;
+    } else {
+        representationMode = PHPickerConfigurationAssetRepresentationModeAutomatic;
+    }
+    configuration.preferredAssetRepresentationMode = representationMode;
     configuration.selectionLimit = [options[@"selectionLimit"] integerValue];
 
     if ([options[@"mediaType"] isEqualToString:@"video"]) {

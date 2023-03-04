@@ -14,6 +14,7 @@ export interface OptionsCommon {
 
 export interface ImageLibraryOptions extends OptionsCommon {
   selectionLimit?: number;
+  representationMode?: 'auto' | 'current' | 'compatible';
 }
 
 export interface CameraOptions extends OptionsCommon {
